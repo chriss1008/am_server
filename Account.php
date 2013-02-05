@@ -3,13 +3,16 @@
 class Account extends Control implements RESTfulInterface 
 {
 	private $db = null;
+	private $auth = null;
 	private $table = "agent_metrics.account";
 	
 	function __construct()
 	{
-		require "./config/config.php";
-		require "./lib/pdodb.php";
+		include "./config/config.php";
+		include_once "./lib/pdodb.php";
+		include_once "./Auth.php";
 		
+		$this->auth = new Authcheck();
 		$this->db = new PDODB();
 		$res = $this->db->connect( $_DB['host'], $_DB['dbname'], $_DB['username'], $_DB['password'] );
 		
@@ -53,7 +56,7 @@ class Account extends Control implements RESTfulInterface
 			self::exceptionResponse(400, "Request is not a valid json format. ");
 		
 		//check account and password exist
-		$is_register = $this->check_email_exist($data["email"]);
+		$is_register = $this->auth->checkEmailExist($data["email"]);
 		if($is_register) 
 			self::exceptionResponse(400, "This email is already registered. ");
 		
@@ -124,18 +127,6 @@ class Account extends Control implements RESTfulInterface
   		echo TRUE;
   }
   
-  
-  function check_email_exist($email)
-  {
-  	$sql = "SELECT id, email FROM ".$this->table." WHERE email=?";
-  	 
-  	$result = $this->db->query($sql, array($email));
-  	
-  	if( $result )
-  		return TRUE;
-  	else
-  		return FALSE;
-  }
  
 	
 }

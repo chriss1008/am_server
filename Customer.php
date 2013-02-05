@@ -62,15 +62,16 @@ class Customer extends Control implements RESTfulInterface
 		$customer['agent_id'] = $data['agent_id'];
 		$customer['child_boy'] = $data["child"]['boy'];
 		$customer['child_girl'] = $data["child"]['girl'];
+		$customer['note'] = $data["note"];
 		$customer['company_name'] = $data["company"]['name'];
 		$customer['company_address'] = $data["company"]["address"];
 		$customer['company_phone'] = $data["company"]["phone"];
-		$customer['company_fax'] = $data["company"]["fax"];
-		$customer['company_job_desc'] = $data["company"]["job_desc"];
+		//$customer['company_fax'] = $data["company"]["fax"];
+		//$customer['company_job_desc'] = $data["company"]["job_desc"];
 		$customer['company_category'] = $data["company"]["category"];
 		$customer['company_title'] = $data["company"]["title"];
-		$customer['company_worktime_start'] = $data["company"]["worktime_start"];
-		$customer['company_worktime_end'] = $data["company"]["worktime_end"];
+		//$customer['company_worktime_start'] = $data["company"]["worktime_start"];
+		//$customer['company_worktime_end'] = $data["company"]["worktime_end"];
 		$customer['create_time'] = time();
 		
 		$result = $this->db->insert("agent_metrics.customer", $customer);
@@ -78,10 +79,19 @@ class Customer extends Control implements RESTfulInterface
 		if( $result ) {
 			$res['id'] = $result;
 			
+			/*FIXME, add checking db record*/
 			$this->insertEvaluation($res['id'], $data["evaluation"]);
 			$this->insertTags($res['id'], $data["tags"]);
+			$this->insertRelationship($res['id'], $data["relationship"]);
 			
-			print_r(json_encode( array("id"=>$result) ));
+			//calculate score
+// 			$weight = doubleval($data["evaluation"]["weight"]);
+// 			$count_list = array_slice($data["evaluation"], 0, count($data["evaluation"])-1);
+// 			$sum = array_sum($count_list) * $weight;
+
+			$sum = $this->countPersonalScore($data["evaluation"]);
+			
+			print_r(json_encode( array("id"=>$result, "score"=>$sum) ));
 		}
 		else {
 			self::exceptionResponse(500, "can not insert data into DB!");
@@ -113,24 +123,34 @@ class Customer extends Control implements RESTfulInterface
 		$customer['agent_id'] = $data['agent_id'];
 		$customer['child_boy'] = $data["child"]['boy'];
 		$customer['child_girl'] = $data["child"]['girl'];
+		$customer['note'] = $data["note"];
 		$customer['company_name'] = $data["company"]['name'];
 		$customer['company_address'] = $data["company"]["address"];
 		$customer['company_phone'] = $data["company"]["phone"];
-		$customer['company_fax'] = $data["company"]["fax"];
-		$customer['company_job_desc'] = $data["company"]["job_desc"];
+		//$customer['company_fax'] = $data["company"]["fax"];
+		//$customer['company_job_desc'] = $data["company"]["job_desc"];
 		$customer['company_category'] = $data["company"]["category"];
 		$customer['company_title'] = $data["company"]["title"];
-		$customer['company_worktime_start'] = $data["company"]["worktime_start"];
-		$customer['company_worktime_end'] = $data["company"]["worktime_end"];
+		//$customer['company_worktime_start'] = $data["company"]["worktime_start"];
+		//$customer['company_worktime_end'] = $data["company"]["worktime_end"];
 		$customer['modify_time'] = time();
 		
 		$result = $this->db->update("agent_metrics.customer", $customer, array("id"=>$data["id"]));
 		
 		if( $result ) {
+			
+			/*FIXME, add checking db record*/
 			$this->insertEvaluation($data["id"], $data["evaluation"]);
 			$this->insertTags($data["id"], $data["tags"]);
+			$this->insertRelationship($res['id'], $data["relationship"]);
 			
-			echo TRUE;
+			//calculate score
+// 			$weight = doubleval($data["evaluation"]["weight"]);
+// 			$count_list = array_slice($data["evaluation"], 0, count($data["evaluation"])-1);
+// 			$sum = array_sum($count_list) * $weight;
+			$sum = $this->countPersonalScore($data["evaluation"]);
+			
+			print_r(json_encode( array("id"=>$data["id"], "score"=>$sum) ));
 		}
 		else {
 			self::exceptionResponse(500, "can not insert data into DB!");
@@ -212,6 +232,34 @@ class Customer extends Control implements RESTfulInterface
   
   
   /* <Internal>
+   * request: customer id, relationship[]
+   * response: boolean
+   */
+  private function insertRelationship($customer_id, $data)
+  {
+  	$now = time();
+  	
+  	//Do delete record first
+  	$result = $this->db->delete("agent_metrics.customer_relationship", array("customer_id"=>$customer_id));
+  	if( !$result )
+  		return FALSE;
+  	 
+  	foreach($data as $relationship) {
+  		$insert_data["customer_id"] = $customer_id;
+  		$insert_data["related"] = $relationship["related"];
+  		$insert_data["relationship_id"] = $relationship["relationship_id"];
+  		$insert_data["create_time"] = $now;
+  	
+  		$result = $this->db->insert("agent_metrics.customer_relationship", $insert_data);
+  		if( !$result )
+  			return FALSE;
+  	}
+  	 
+  	return TRUE;
+  }
+  
+  
+  /* <Internal>
    * request: customer id
    * response: customer[]
    */
@@ -237,6 +285,7 @@ class Customer extends Control implements RESTfulInterface
   	$personal['telephone'] = $result['telephone'];
   	$personal['thumbnail'] = $result['thumbnail'];
   	$personal['fb_id'] = $result['fb_id'];
+  	$personal['note'] = $result["note"];
   	$personal['create_time'] = $result['create_time'];
   	$personal['modify_time'] = $result['modify_time'];
   	
@@ -253,16 +302,19 @@ class Customer extends Control implements RESTfulInterface
   	//tag
   	$tags = $this->getTags($customer_id);
   	
+  	//relationship
+  	$relationship = $this->getRelationship($customer_id);
+  	
   	//company
   	$company['name'] = $result['company_name'];
   	$company['address'] = $result['company_address'];
   	$company['phone'] = $result['company_phone'];
-  	$company['fax'] = $result['company_fax'];
-  	$company['job_desc'] = $result['company_job_desc'];
+  	//$company['fax'] = $result['company_fax'];
+  	//$company['job_desc'] = $result['company_job_desc'];
   	$company['category'] = $result['company_category'];
   	$company['title'] = $result['company_title'];
-  	$company['worktime_start'] = $result['company_worktime_start'];
-  	$company['worktime_end'] = $result['company_worktime_end'];
+  	//$company['worktime_start'] = $result['company_worktime_start'];
+  	//$company['worktime_end'] = $result['company_worktime_end'];
   	
   	
   	//combine the data
@@ -278,6 +330,9 @@ class Customer extends Control implements RESTfulInterface
   	
   	if( $tags )
   		$data['tags'] = $tags;
+  	
+  	if( $relationship )
+  		$data['relationship'] = $relationship;
   	
   	return $data;
   }
@@ -308,10 +363,12 @@ class Customer extends Control implements RESTfulInterface
   		//evaluation
   		$evaluations = $this->getEvaluation($customer["id"]);
   		if($evaluations) {
-  			$weight = doubleval($evaluations["weight"]);
-  			$count_list = array_slice($evaluations, 0, count($evaluations)-1);
-  			$sum = array_sum($count_list) * $weight;
-  			$partial["evaluation_score"] = $sum;
+//   			$weight = doubleval($evaluations["weight"]);
+//   			$count_list = array_slice($evaluations, 0, count($evaluations)-1);
+//   			$sum = array_sum($count_list) * $weight;
+//   			$partial["evaluation_score"] = $sum;
+
+  			$partial["evaluation_score"] = $this->countPersonalScore($evaluations);
   		}
   			
   		//tag
@@ -334,8 +391,16 @@ class Customer extends Control implements RESTfulInterface
    * response: last visit record[]
    */
   function getLastVisit($customer_id) {
-  	$sql = "SELECT detail, place, time FROM customer_visit_history WHERE customer_id=? 
-  					ORDER BY create_time DESC LIMIT 1";
+  	$sql = "SELECT 
+  						detail, 
+  						place, 
+  						time 
+  					FROM 
+  						customer_visit_history 
+  					WHERE 
+  						customer_id=? 
+  					ORDER BY 
+  						create_time DESC LIMIT 1";
   	
   	$result = $this->db->query($sql, array($customer_id));
   
@@ -348,9 +413,21 @@ class Customer extends Control implements RESTfulInterface
    * response: evaluation[]
    */
   function getEvaluation($customer_id) {
-  	$sql = "SELECT income_monthly, age, marriage, dependent_count, known_time, contact_frequency, 
-  					contact_difficulty, weight FROM customer_evaluation WHERE customer_id=? 
-  					ORDER BY create_time DESC LIMIT 1";
+  	$sql = "SELECT 
+  						income_monthly, 
+  						age, 
+  						marriage, 
+  						dependent_count, 
+  						known_time, 
+  						contact_frequency, 
+  						contact_difficulty, 
+  						weight 
+  					FROM 
+  						customer_evaluation 
+  					WHERE 
+  						customer_id=? 
+  					ORDER BY 
+  						create_time DESC LIMIT 1";
   	
   	$result = $this->db->query($sql, array($customer_id));
   
@@ -369,6 +446,42 @@ class Customer extends Control implements RESTfulInterface
 		
 		return $result;
 	}
-
+	
+	
+	/* <Internal>
+	 * request: customer id
+	 * response: tags[]
+	 */
+	function getRelationship($customer_id) {
+		$sql = "SELECT 
+							related,
+							relationship_id
+		 				FROM 
+							customer_relationship 
+						WHERE 
+							customer_id=? ";
+		
+		$result = $this->db->queryAll($sql, array($customer_id));
+		
+		return $result;
+	}
+	
+	
+	/* <Internal>
+	 * request: 
+	 * response: 
+	 */
+	function countPersonalScore($data) {
+		$sum = 0;
+		
+		$weight = doubleval($data["weight"]);
+		$count_list = array_slice($data, 0, count($data)-1);
+		$sum = array_sum($count_list) * $weight;
+		
+		return $sum;
+		
+	}
+	
+	
 }
 ?>

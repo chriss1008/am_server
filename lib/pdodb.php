@@ -201,7 +201,7 @@ class PDODB
 	
 	
 	
-	function begin_transaction()
+	function beginTransaction()
 	{
 		$this->_dbConn->beginTransaction();
 	}
